@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — Rizz Pterodactyl</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/common.css">
+<style>
+  .ctx-item { padding: 10px 14px; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 10px; color: #e4e6eb; transition: background 0.2s; }
+  .ctx-item:hover { background-color: #374151; }
+  .stat-card-chart {
+    background: rgba(17, 24, 39, 0.85);
+    border: 1px solid rgba(0, 210, 255, 0.2);
+    border-radius: 12px;
+    padding: 12px 15px;
+    margin-bottom: 15px;
+    backdrop-filter: blur(6px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+  .stat-header-chart {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #00d2ff;
+    letter-spacing: 0.5px;
+  }
+  .stat-values-chart { font-size: 0.95rem; font-weight: bold; color: #ffffff; }
+  .chart-container { width: 100%; height: 45px; margin-top: 5px; position: relative; }
+  canvas { width: 100% !important; height: 100% !important; }
+</style>
+</head>
+<body>
+
+<div id="dashboard" style="display:none;">
+  <div class="navbar">
+    <div class="brand"><i class="fas fa-dragon"></i> <span>Rizz Pterodactyl</span></div>
+    <div class="user-info" id="navbarUser"></div>
+  </div>
+
+  <div class="layout">
+    <div class="sidebar">
+      <div class="menu-item active" onclick="location.href='/dashboard'"><i class="fas fa-server"></i> Dashboard</div>
+      <div class="menu-item" id="menuUsers" onclick="location.href='/user'"><i class="fas fa-users"></i> Users</div>
+      <div class="menu-item" onclick="location.href='/settings'"><i class="fas fa-cog"></i> Settings</div>
+    </div>
+    <div class="main-content" id="mainList">
+      <div id="view-list">
+        <div class="page-title">Dashboard</div>
+        <div class="page-subtitle" id="welcomeMsg">Welcome</div>
+        <div class="card">
+          <div class="card-header">
+            <h2><i class="fas fa-server"></i> Server List</h2>
+            <button class="btn btn-primary" id="btnAddServer" onclick="openAddServer()"><i class="fas fa-plus"></i> Add Server</button>
+          </div>
+          <div id="serverContainer"></div>
+        </div>
+      </div>
+
+      <!-- DETAIL SERVER -->
+      <div id="page-detail" style="display:none;">
+        <button class="btn btn-secondary btn-sm" onclick="closeDetail()" style="margin-bottom:16px"><i class="fas fa-arrow-left"></i> Back</button>
+        <div class="page-title" id="detailName">Server</div>
+        <div class="page-subtitle" id="detailInfo">-</div>
+        <div id="detailCountdown" style="margin-top:16px;"></div>
+
+        <div class="startup-box">
+          <div><i class="fas fa-play-circle" style="color:var(--primary)"></i> Startup: <span id="startupDisplay" style="color:var(--success)">npm start</span></div>
+          <button class="btn btn-warning btn-sm" onclick="openEditStartup()"><i class="fas fa-edit"></i> Edit</button>
+        </div>
+
+        <div class="tab-buttons" style="margin-top:24px">
+          <button class="tab-btn active" onclick="switchTab('console',this)"><i class="fas fa-terminal"></i> Console</button>
+          <button class="tab-btn" onclick="switchTab('files',this)"><i class="fas fa-folder"></i> Files</button>
+          <button class="tab-btn" onclick="switchTab('settings',this)"><i class="fas fa-cog"></i> Settings</button>
+          <button class="tab-btn" id="tabBtnKelola" onclick="switchTab('kelola',this)"><i class="fas fa-shield-alt"></i> Manage</button>
+        </div>
+
+        <div id="tab-console">
+          <div class="card">
+            <div class="card-header">
+              <h2><i class="fas fa-terminal"></i> Console</h2>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn btn-success btn-sm" onclick="action('start')"><i class="fas fa-play"></i> Start</button>
+                <button class="btn btn-warning btn-sm" onclick="action('restart')"><i class="fas fa-sync"></i> Restart</button>
+                <button class="btn btn-danger btn-sm" onclick="action('stop')"><i class="fas fa-stop"></i> Stop</button>
+                <button class="btn btn-info btn-sm" onclick="action('npm-install')"><i class="fas fa-download"></i> npm install</button>
+              </div>
+            </div>
+            <div class="console-output" id="consoleOut"></div>
+            <div class="console-input">
+              <input type="text" id="cmdInput" placeholder="Type a command..." onkeypress="if(event.key==='Enter')sendCmd()">
+              <button class="btn btn-primary" onclick="sendCmd()"><i class="fas fa-paper-plane"></i></button>
+            </div>
+          </div>
+
+          <!-- GRAFIK REAL-TIME (CPU, RAM, STORAGE, NETWORK) -->
+          <div style="margin-top: 20px;">
+            <div class="stat-card-chart">
+              <div class="stat-header-chart">
+                <span><i class="fas fa-microchip"></i> CPU</span>
+                <span class="stat-values-chart" id="chartCpuText">0.00% / 100%</span>
+              </div>
+              <div class="chart-container"><canvas id="cpuChart"></canvas></div>
+            </div>
+
+            <div class="stat-card-chart">
+              <div class="stat-header-chart">
+                <span><i class="fas fa-memory"></i> RAM</span>
+                <span class="stat-values-chart" id="chartRamText">0 MB / ∞</span>
+              </div>
+              <div class="chart-container"><canvas id="ramChart"></canvas></div>
+            </div>
+
+            <div class="stat-card-chart">
+              <div class="stat-header-chart">
+                <span><i class="fas fa-hdd"></i> STORAGE (DISK)</span>
+                <span class="stat-values-chart" id="chartDiskText">0 MB / ∞</span>
+              </div>
+              <div class="chart-container"><canvas id="diskChart"></canvas></div>
+            </div>
+
+            <div class="stat-card-chart">
+              <div class="stat-header-chart">
+                <span><i class="fas fa-network-wired"></i> NETWORK</span>
+                <span class="stat-values-chart" id="chartNetText">N/A</span>
+              </div>
+              <div class="chart-container"><canvas id="netChart"></canvas></div>
+            </div>
+          </div>
+
+          <!-- Metric asli (disembunyikan, tetap terhubung ke backend) -->
+          <div class="metrics-grid" style="display:none;">
+            <div class="metric-card"><div class="label">Status</div><div class="value" id="mStatus">-</div></div>
+            <div class="metric-card"><div class="label">Uptime</div><div class="value" id="mUptime">-</div></div>
+            <div class="metric-card"><div class="label">CPU</div><div class="value" id="mCpu">0.0%</div></div>
+            <div class="metric-card"><div class="label">RAM</div><div class="value" id="mRam">-</div></div>
+          </div>
+        </div>
+
+        <div id="tab-files" style="display:none">
+          <div class="card">
+            <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+              <button class="btn btn-primary btn-sm" onclick="document.getElementById('upInput').click()"><i class="fas fa-upload"></i> UPLOAD</button>
+              <button class="btn btn-primary btn-sm" onclick="newFile()"><i class="fas fa-file-plus"></i> NEW FILE</button>
+              <input type="file" id="upInput" style="display:none" onchange="upload(this)">
+            </div>
+
+            <div style="display:flex; gap:8px; margin-bottom:16px;">
+              <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="newFolder()"><i class="fas fa-folder-plus"></i> CREATE DIRECTORY</button>
+              <button class="btn btn-secondary btn-sm" onclick="loadFiles()"><i class="fas fa-sync"></i> REFRESH</button>
+            </div>
+
+            <div id="pathDisplay" style="padding:10px 14px;background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--text-main);margin-bottom:16px; display:flex; align-items:center;">
+              <input type="checkbox" id="selectAllChk" style="width:16px;height:16px;margin-right:12px;accent-color:var(--primary);cursor:pointer" onchange="toggleSelectAll(this.checked)">
+              / <span id="currentPathText" style="margin-left:8px; font-weight:600;">home/container</span>
+            </div>
+
+            <div id="fileList" style="border:1px solid var(--border); border-radius:8px; overflow:hidden;"></div>
+          </div>
+        </div>
+
+        <div id="tab-settings" style="display:none">
+          <div class="card">
+            <div class="card-header"><h2><i class="fas fa-edit"></i> Edit Server</h2></div>
+            <div id="settingsAlert" style="display:none;padding:12px 16px;border-radius:8px;font-size:13px;margin-bottom:20px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:var(--warning)">
+              <i class="fas fa-info-circle"></i> <span id="settingsAlertText"></span>
+            </div>
+            <div class="form-group"><label>Server Name</label><input id="setSrvName" placeholder="My Bot"></div>
+            <div class="form-group">
+              <label>Startup Command</label>
+              <input id="setSrvStartup" placeholder="npm start">
+              <div class="hint-text">💡 Allowed: <code>node index.js</code>, <code>npm start</code>, <code>npm install baileys</code>.</div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label>RAM (MB) <span class="lock-res">🔒 OWNER/ADMIN</span></label><input type="number" id="setSrvRam" value="0" min="0" class="res-field"></div>
+              <div class="form-group"><label>CPU (%) <span class="lock-res">🔒 OWNER/ADMIN</span></label><input type="number" id="setSrvCpu" value="0" min="0" class="res-field"></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label>Disk (MB) <span class="lock-res">🔒 OWNER/ADMIN</span></label><input type="number" id="setSrvDisk" value="0" min="0" class="res-field"></div>
+              <div class="form-group">
+                <label>Active Days <span class="lock-res">🔒 OWNER/ADMIN</span></label>
+                <input type="number" id="setSrvDays" value="30" min="0" class="res-field">
+              </div>
+            </div>
+            <div style="display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap">
+              <button class="btn btn-secondary" onclick="resetSettingsForm()"><i class="fas fa-undo"></i> Reset</button>
+              <button class="btn btn-success" id="btnSaveSettings" onclick="saveServerSettings()"><i class="fas fa-save"></i> Save Changes</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="tab-kelola" style="display:none">
+          <div class="card">
+            <div class="card-header"><h2><i class="fas fa-shield-alt"></i> Manage Server</h2></div>
+            <div class="form-group">
+              <label>Change Owner</label>
+              <select id="kelolaOwnerPick"></select>
+              <button class="btn btn-gold btn-sm" style="margin-top:12px" onclick="changeOwner()"><i class="fas fa-exchange-alt"></i> Change Owner</button>
+            </div>
+            <div class="danger-zone">
+              <h3><i class="fas fa-exclamation-triangle"></i> Delete Server</h3>
+              <p>Deleting a server will <strong>stop the process</strong>, delete all <strong>files & folders</strong>, and remove the <strong>server data</strong>.</p>
+              <button class="btn btn-danger" onclick="deleteServerFromDetail()"><i class="fas fa-trash"></i> Delete This Server</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Bulk Action Bar -->
+  <div id="bulkBar" style="display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#1f2937; border:1px solid #374151; padding:12px 20px; border-radius:8px; box-shadow:0 10px 25px rgba(0,0,0,0.5); z-index:1000; align-items:center; gap:16px; width:90%; max-width:500px; justify-content:space-between;">
+    <div class="info" style="font-size:13px;"><strong id="selCount" style="color:#3b82f6">0</strong> Selected</div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-secondary btn-sm" onclick="bulkMove()"><i class="fas fa-arrow-up"></i> MOVE</button>
+      <button class="btn btn-purple btn-sm" id="bulkArchiveBtn" onclick="bulkArchiveAction()">
+        <i class="fas fa-file-archive" id="bulkArchiveIcon"></i> <span id="bulkArchiveText">ARCHIVE</span>
+      </button>
+      <button class="btn btn-danger btn-sm" onclick="bulkDelete()"><i class="fas fa-trash"></i> DELETE</button>
+      <button class="btn btn-secondary btn-sm" onclick="clearSelection()"><i class="fas fa-times"></i></button>
+    </div>
+  </div>
+</div>
+
+<!-- Context Menu (Titik 3) -->
+<div id="contextMenu" style="display:none; position:fixed; background:#1f2937; border:1px solid #374151; border-radius:6px; box-shadow:0 10px 25px rgba(0,0,0,0.5); z-index:2000; min-width:150px; padding:4px 0;">
+  <div class="ctx-item" id="ctxEdit" onclick="ctxAction('edit')"><i class="fas fa-file-code"></i> Edit</div>
+  <div class="ctx-item" onclick="ctxAction('rename')"><i class="fas fa-edit"></i> Rename</div>
+  <div class="ctx-item" onclick="ctxAction('move')"><i class="fas fa-arrow-up"></i> Move</div>
+  <div class="ctx-item" id="ctxArchiveBtn" onclick="ctxAction('archive')">
+    <i class="fas fa-file-archive" id="ctxArchiveIcon"></i> <span id="ctxArchiveText">Archive</span>
+  </div>
+  <div class="ctx-item" onclick="ctxAction('delete')" style="color:var(--danger); border-top:1px solid var(--border);"><i class="fas fa-trash"></i> Delete</div>
+</div>
+
+<!-- Add Server Modal -->
+<div class="modal" id="addServerModal">
+  <div class="modal-content">
+    <h2><i class="fas fa-plus-circle"></i> Add Server</h2>
+    <div class="form-group"><label>Server Name</label><input id="srvName" placeholder="My Bot"></div>
+    <div class="form-group" id="ownerPickWrap"><label>Owner</label><select id="srvOwner"></select></div>
+    <div class="form-group">
+      <label>Startup Command</label>
+      <input id="srvStartup" value="npm start">
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>RAM (MB)</label><input type="number" id="srvRam" value="0"></div>
+      <div class="form-group"><label>CPU (%)</label><input type="number" id="srvCpu" value="0"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Disk (MB)</label><input type="number" id="srvDisk" value="0"></div>
+      <div class="form-group"><label>Active Days</label><input type="number" id="srvDays" value="30" min="0"></div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-secondary" onclick="closeModal('addServerModal')">Cancel</button>
+      <button class="btn btn-success" onclick="createServer()"><i class="fas fa-save"></i> Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Startup Modal -->
+<div class="modal" id="editStartupModal">
+  <div class="modal-content">
+    <h2><i class="fas fa-edit"></i> Edit Startup</h2>
+    <div class="form-group">
+      <label>Startup Command</label>
+      <input id="editStartupInput">
+    </div>
+    <div class="actions">
+      <button class="btn btn-secondary" onclick="closeModal('editStartupModal')">Cancel</button>
+      <button class="btn btn-success" onclick="saveStartup()"><i class="fas fa-save"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="compressModal">
+  <div class="modal-content">
+    <h2><i class="fas fa-file-archive"></i> Compress to ZIP</h2>
+    <div class="form-group"><label>Output Filename</label><input id="compressOutput" placeholder="archive.zip"></div>
+    <div class="form-group"><label>File/Folder Paths</label><textarea id="compressPaths" rows="4"></textarea></div>
+    <div class="actions">
+      <button class="btn btn-secondary" onclick="closeModal('compressModal')">Cancel</button>
+      <button class="btn btn-purple" onclick="doCompress()"><i class="fas fa-file-archive"></i> Compress</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="extractModal">
+  <div class="modal-content">
+    <h2><i class="fas fa-file-import"></i> Extract Archive</h2>
+    <div class="form-group"><label>Archive</label><input id="extractPath" readonly></div>
+    <div class="form-group"><label>Extract To Folder</label><input id="extractTarget"></div>
+    <div class="actions">
+      <button class="btn btn-secondary" onclick="closeModal('extractModal')">Cancel</button>
+      <button class="btn btn-warning" onclick="doExtract()"><i class="fas fa-file-import"></i> Extract</button>
+    </div>
+  </div>
+</div>
+
+<div class="editor-modal" id="editorModal">
+  <div class="editor-content">
+    <div class="editor-header">
+      <div><i class="fas fa-file-code" style="color:var(--primary)"></i> <span id="editorFile">file.js</span></div>
+      <button class="btn btn-secondary btn-sm" onclick="closeEditor()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="editor-body"><textarea id="editorContent" spellcheck="false"></textarea></div>
+    <div class="editor-footer">
+      <button class="btn btn-secondary" onclick="closeEditor()">Cancel</button>
+      <button class="btn btn-success" onclick="saveFile()"><i class="fas fa-save"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/common.js"></script>
+<script>
+let servers=[], users=[], currentServerId=null, subPath='', currentFile='', logTimer=null;
+let selectedFiles = new Set();
+let ctxPath = null, ctxIsDir = false, ctxIsArchive = false;
+const ARCHIVE_EXTS = ['.zip','.tar','.tar.gz','.tgz','.gz','.7z','.rar','.tar.bz2','.tar.xz'];
+
+// ─── Format MB (RAM/Disk dari backend dalam MB) ───
+function fmtMB(v, d){
+  if(v===null || v===undefined || isNaN(v)) return '…';
+  d = (d===undefined) ? 1 : d;
+  return v >= 1024 ? (v/1024).toFixed(2)+' GB' : Number(v).toFixed(d)+' MB';
+}
+
+// ─── Disk: ukuran asli per server, format sama dengan File Manager ───
+// Backend membulatkan ke 0,1 MB, jadi server kecil kebaca 0.0 MB. Kalau <0,1 MB, hitung persis
+// dari daftar file (sama seperti yang tampil di File Manager). Hasilnya di-cache 30 detik.
+const DISK = {};
+let diskWalks = 0;
+async function walkServerBytes(id){
+  let total = 0, reqs = 0;
+  const queue = [''];
+  while(queue.length){
+    if(++reqs > 40) return null;            // folder terlalu besar -> pakai angka backend
+    const d = await api('/api/servers/'+id+'/files?path='+encodeURIComponent(queue.pop()));
+    if(!d.success) return null;
+    for(const f of d.files){ if(f.isDirectory) queue.push(f.path); else total += f.size || 0; }
+  }
+  return total;
+}
+function diskBytes(s){                       // -> bytes, atau null kalau belum terukur
+  const mb = (s.diskUsage===null || s.diskUsage===undefined) ? null : Number(s.diskUsage);
+  if(mb === null) return null;
+  if(mb >= 0.1) return mb * 1048576;
+  const c = DISK[s.id] || (DISK[s.id] = {bytes:null, ts:0, busy:false});
+  if(!c.busy && diskWalks < 2 && Date.now() - c.ts > 30000){
+    c.busy = true; diskWalks++;
+    walkServerBytes(s.id).then(b=>{ if(b!==null) c.bytes = b; }).catch(()=>{})
+      .finally(()=>{ c.ts = Date.now(); c.busy = false; diskWalks--; });
+  }
+  return c.bytes !== null ? c.bytes : mb * 1048576;
+}
+
+// ─── Grafik sparkline (canvas murni, tanpa library, aman dari CSP) ───
+const SERIES_LEN = 30;
+let series = null;
+function resetSeries(){
+  series = { cpu:Array(SERIES_LEN).fill(0), ram:Array(SERIES_LEN).fill(0), disk:Array(SERIES_LEN).fill(0), net:Array(SERIES_LEN).fill(0) };
+}
+resetSeries();
+function pushSeries(k, v){ series[k].shift(); series[k].push(v); }
+let chartMax = { cpu:100, ram:128, disk:1024, net:1 };
+
+function drawSparkline(id, data, maxVal, color){
+  const cv = document.getElementById(id);
+  if(!cv || !cv.parentElement) return;
+  const r = cv.parentElement.getBoundingClientRect();
+  const w = Math.floor(r.width), h = Math.floor(r.height);
+  if(w < 2 || h < 2) return;
+  const dpr = window.devicePixelRatio || 1;
+  if(cv.width !== w*dpr || cv.height !== h*dpr){ cv.width = w*dpr; cv.height = h*dpr; }
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+  const max = maxVal > 0 ? maxVal : 1, n = data.length, pad = 2;
+  const pts = data.map((v,i)=>[ i*(w/(n-1)), h - pad - Math.min(1, Math.max(0, v/max)) * (h - pad*2) ]);
+  const g = ctx.createLinearGradient(0,0,0,h);
+  g.addColorStop(0,'rgba(0,210,255,0.25)'); g.addColorStop(1,'rgba(0,210,255,0)');
+  ctx.beginPath(); ctx.moveTo(0,h); pts.forEach(p=>ctx.lineTo(p[0],p[1])); ctx.lineTo(w,h); ctx.closePath();
+  ctx.fillStyle = g; ctx.fill();
+  ctx.beginPath(); pts.forEach((p,i)=> i ? ctx.lineTo(p[0],p[1]) : ctx.moveTo(p[0],p[1]));
+  ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.stroke();
+}
+function renderCharts(){
+  drawSparkline('cpuChart',  series.cpu,  chartMax.cpu,  '#00d2ff');
+  drawSparkline('ramChart',  series.ram,  chartMax.ram,  '#3a7bd5');
+  drawSparkline('diskChart', series.disk, chartMax.disk, '#00d2ff');
+  drawSparkline('netChart',  series.net,  chartMax.net,  '#3a7bd5');
+}
+window.addEventListener('resize', renderCharts);
+
+(async()=>{
+  const u = await requireLogin();
+  if (!u) return;
+  document.getElementById('dashboard').style.display = 'flex';
+  renderNavbar();
+  document.getElementById('welcomeMsg').textContent = 'Welcome, ' + u.username + ' (' + u.role + ')';
+  if (roleLevel(u.role) < 2) {
+    document.getElementById('menuUsers').style.display = 'none';
+    document.getElementById('btnAddServer').style.display = 'none';
+  }
+  loadServers();
+})();
+
+async function loadServers(){
+  const d = await api('/api/servers');
+  if (!d.success) return;
+  servers = d.servers;
+  renderServers();
+}
+
+function formatCountdown(ms){
+  if(ms<=0) return {str:'EXPIRED',expired:true};
+  const s=Math.floor(ms/1000);
+  const d=Math.floor(s/86400), h=Math.floor((s%86400)/3600), m=Math.floor((s%3600)/60), sec=s%60;
+  return {str:`${d}d ${h}h ${m}m ${sec}s`,expired:false};
+}
+
+function renderCountdownHTML(s){
+  if(s.isUnlimited) return `<div class="countdown-box unlimited">
+    <div class="cd-label"><i class="fas fa-infinity"></i> Validity</div>
+    <div class="cd-time">∞ LIFETIME</div>
+    <div class="cd-sub">This server will not expire</div>
+  </div>`;
+  if(s.expireAt){
+    return `<div class="countdown-box" data-expire-at="${s.expireAt}" data-created-at="${new Date(s.createdAt).getTime()}">
+      <div class="cd-label"><i class="fas fa-hourglass-half"></i> Expires In</div>
+      <div class="cd-time" data-cd-time>--</div>
+      <div class="cd-progress"><div class="cd-progress-fill" data-cd-bar style="width:0%"></div></div>
+      <div class="cd-sub" data-cd-sub></div>
+    </div>`;
+  }
+  return '';
+}
+
+function updateAllCountdowns(){
+  document.querySelectorAll('[data-expire-at]').forEach(box=>{
+    const expireAt=parseInt(box.dataset.expireAt), createdAt=parseInt(box.dataset.createdAt);
+    const remaining=expireAt-Date.now(), total=expireAt-createdAt;
+    const cd=formatCountdown(remaining);
+    const t=box.querySelector('[data-cd-time]'), b=box.querySelector('[data-cd-bar]'), subEl=box.querySelector('[data-cd-sub]');
+
+    if(cd.expired){
+      if(t)t.textContent='EXPIRED';
+      if(b)b.style.width='100%';
+      if(subEl) subEl.textContent='❌ Time is up! Server will be deleted automatically by the system.';
+      box.classList.remove('warn'); box.classList.add('danger');
+      return;
+    }
+
+    if(t)t.textContent=cd.str;
+    if(b)b.style.width=(((total-remaining)/total)*100).toFixed(1)+'%';
+
+    const daysLeft=remaining/(24*60*60*1000);
+    box.classList.remove('warn','danger');
+
+    if(daysLeft<=1){
+      box.classList.add('danger');
+      if(subEl) subEl.textContent='⚠️ Less than 24 hours! Server will be deleted soon!';
+    }
+    else if(daysLeft<=7){
+      box.classList.add('warn');
+      if(subEl) subEl.textContent='⚠️ Will be automatically deleted in '+Math.ceil(daysLeft)+' day(s)';
+    }
+    else {
+      if(subEl) subEl.textContent='Expires: '+new Date(expireAt).toLocaleString('en-US',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    }
+  });
+}
+setInterval(updateAllCountdowns, 1000);
+
+function renderServers(){
+  const c = document.getElementById('serverContainer');
+  if (!servers.length) {
+    c.innerHTML = '<div class="empty-state"><i class="fas fa-server"></i><h3>No servers yet</h3></div>';
+    return;
+  }
+  const g = document.createElement('div');
+  g.className = 'server-grid';
+  servers.forEach(s => {
+    const card = document.createElement('div');
+    card.className = 'server-card';
+    card.onclick = () => openServer(s.id);
+
+    // Nilai ASLI dari backend (0 saat server offline), bukan angka acak
+    const cpu = Number(s.cpuUsage) || 0;
+    const ram = Number(s.ramUsage) || 0;
+    const limit = s.ram || 0;
+    const diskB = diskBytes(s);
+    const diskLimit = s.disk || 0;
+    const diskLimitB = diskLimit * 1048576;
+    const diskPct = diskB === null ? 0 : (diskLimit>0 ? Math.min(100,(diskB/diskLimitB)*100) : Math.min(100,(diskB/1073741824)*100));
+
+    card.innerHTML = `
+      <div class="top">
+        <div>
+          <h3>${esc(s.name)}</h3>
+          <div class="owner">Owner: ${esc(s.ownerName)}</div>
+          <div class="startup-cmd"><i class="fas fa-play"></i> ${esc(s.startupCommand)}</div>
+        </div>
+        <span class="badge ${s.status}"><span class="status-dot ${s.status}"></span>${s.status.toUpperCase()}</span>
+      </div>
+
+      <div class="metric-row"><div class="metric-head"><span>CPU</span><span>${cpu.toFixed(1)}%</span></div><div class="metric-bar"><div class="metric-bar-fill cpu" style="width:${Math.min(100,cpu)}%"></div></div></div>
+
+      <div class="metric-row"><div class="metric-head"><span>RAM</span><span>${fmtMB(ram,0)}${limit>0?' / '+fmtMB(limit,0):' / ∞'}</span></div><div class="metric-bar"><div class="metric-bar-fill ram" style="width:${limit>0?Math.min(100,ram/limit*100):Math.min(100,(ram/512)*100)}%"></div></div></div>
+
+      <div class="metric-row"><div class="metric-head"><span>STORAGE (DISK)</span><span>${diskB===null?'…':fmtSize(diskB)}${diskLimit>0?' / '+fmtSize(diskLimitB):' / ∞'}</span></div><div class="metric-bar"><div class="metric-bar-fill disk" style="width:${diskPct}%"></div></div></div>
+
+      ${renderCountdownHTML(s)}
+    `;
+    g.appendChild(card);
+  });
+  c.innerHTML = '';
+  c.appendChild(g);
+  updateAllCountdowns();
+}
+
+function openServer(id){
+  currentServerId = id; subPath=''; selectedFiles.clear();
+  const s = servers.find(x=>x.id===id);
+  if(!s) return;
+  document.getElementById('view-list').style.display = 'none';
+  document.getElementById('page-detail').style.display = 'block';
+  document.getElementById('detailName').textContent = s.name;
+  document.getElementById('detailInfo').textContent = 'Owner: ' + s.ownerName + ' | ' + s.status.toUpperCase();
+  document.getElementById('startupDisplay').textContent = s.startupCommand;
+  const cd = document.getElementById('detailCountdown');
+  cd.innerHTML = renderCountdownHTML(s);
+  document.getElementById('tabBtnKelola').style.display = roleLevel(currentUser.role)>=2 ? 'inline-block' : 'none';
+
+  // Reset grafik tiap ganti server supaya data server lain tidak ikut
+  resetSeries();
+  setTimeout(renderCharts, 50);
+
+  loadLogs();
+  if(logTimer) clearInterval(logTimer);
+  logTimer = setInterval(loadLogs, 2000);
+  switchTab('console', document.querySelector('.tab-btn'));
+}
+
+function closeDetail(){
+  document.getElementById('page-detail').style.display = 'none';
+  document.getElementById('view-list').style.display = 'block';
+  if(logTimer){ clearInterval(logTimer); logTimer=null; }
+  currentServerId = null;
+  loadServers();
+}
+
+function switchTab(t, el){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  if(el) el.classList.add('active');
+  ['console','files','settings','kelola'].forEach(x=>{
+    document.getElementById('tab-'+x).style.display = (x===t) ? 'block' : 'none';
+  });
+  if(t==='console') setTimeout(renderCharts, 50);
+  if(t==='files') loadFiles();
+  if(t==='settings') loadServerSettings();
+  if(t==='kelola') loadKelolaTab();
+}
+
+async function loadLogs(){
+  if(!currentServerId) return;
+  const reqId = currentServerId;
+  const d = await api('/api/servers/'+reqId+'/logs');
+  if(!d.success || reqId !== currentServerId) return;
+  const o = document.getElementById('consoleOut');
+  const atBottom = o.scrollTop + o.clientHeight >= o.scrollHeight - 30;
+  o.innerHTML = (d.logs||[]).map(l=>{
+    if(typeof l==='string') return `<div>${esc(l)}</div>`;
+    return `<div class="log-${l.type||'output'}">${esc(l.line)}</div>`;
+  }).join('');
+  if(atBottom) o.scrollTop = o.scrollHeight;
+
+  const s = servers.find(x => x.id === reqId) || {};
+  const ramLimit = s.ram || 0, diskLimit = s.disk || 0, cpuLimit = s.cpu || 0;
+
+  // Nilai ASLI dari backend (0 kalau server offline)
+  const cpuVal = Number(d.cpuUsage) || 0;
+  const ramVal = Number(d.ramUsage) || 0;
+  const diskVal = diskBytes({ id: reqId, diskUsage: d.diskUsage });   // bytes
+
+  document.getElementById('mStatus').textContent = (d.status||'offline').toUpperCase();
+  document.getElementById('mUptime').textContent = (d.uptime||0)+'s';
+  document.getElementById('mCpu').textContent = cpuVal.toFixed(1)+'%';
+  document.getElementById('mRam').textContent = ramVal+' MB';
+
+  // CPU
+  document.getElementById('chartCpuText').textContent = cpuLimit>0 ? `${cpuVal.toFixed(2)}% / ${cpuLimit}%` : `${cpuVal.toFixed(2)}% / ∞ (Unlimited)`;
+  pushSeries('cpu', cpuVal);
+  chartMax.cpu = cpuLimit>0 ? cpuLimit : Math.max(100, ...series.cpu);
+
+  // RAM
+  document.getElementById('chartRamText').textContent = `${fmtMB(ramVal,0)} / ${ramLimit>0 ? fmtMB(ramLimit,0) : '∞ (Unlimited)'}`;
+  pushSeries('ram', ramVal);
+  chartMax.ram = ramLimit>0 ? ramLimit : Math.max(128, Math.max(...series.ram)*1.25);
+
+  // DISK (ukuran folder server ini sendiri)
+  document.getElementById('chartDiskText').textContent = `${diskVal===null ? '…' : fmtSize(diskVal)} / ${diskLimit>0 ? fmtSize(diskLimit*1048576) : '∞ (Unlimited)'}`;
+  pushSeries('disk', diskVal===null ? 0 : diskVal);
+  chartMax.disk = diskLimit>0 ? diskLimit*1048576 : Math.max(1073741824, Math.max(...series.disk)*1.25);
+
+  // NETWORK: belum bisa diukur per server (tidak ada isolasi jaringan), jadi tidak dipalsukan
+  document.getElementById('chartNetText').textContent = 'N/A';
+  pushSeries('net', 0);
+
+  renderCharts();
+}
+
+async function action(a){
+  const d = await api('/api/servers/'+currentServerId+'/'+a, {method:'POST'});
+  if(!d.success) return toast(d.error||'Failed','error');
+  toast(a.toUpperCase()+' OK','success');
+  loadServers();
+}
+
+async function sendCmd(){
+  const i = document.getElementById('cmdInput');
+  const c = i.value.trim();
+  if(!c) return;
+  const d = await api('/api/servers/'+currentServerId+'/command', {method:'POST', body:JSON.stringify({cmd:c})});
+  if(!d.success) return toast(d.error||'Command failed','error');
+  i.value='';
+  loadLogs();
+}
+
+// ─── FILE MANAGER CORE ───
+async function loadFiles(){
+  const d = await api('/api/servers/'+currentServerId+'/files?path='+encodeURIComponent(subPath));
+  if(!d.success) return;
+  if(DISK[currentServerId]) DISK[currentServerId].ts = 0;   // ukur ulang disk setelah ada perubahan file
+
+  document.getElementById('currentPathText').textContent = 'home/container/' + (d.currentPath || '');
+
+  const c = document.getElementById('fileList');
+  let h = '';
+
+  if(subPath) {
+    h += `<div class="file-row" style="background:var(--bg-surface); border-bottom:1px solid var(--border); padding:12px; display:flex; align-items:center; cursor:pointer;" onclick="goUp()">
+      <div style="width:20px; margin-right:10px;"></div>
+      <div class="icon" style="width:24px; color:var(--warning);"><i class="fas fa-level-up-alt"></i></div>
+      <div class="name" style="flex:1; font-weight:600;">..</div>
+    </div>`;
+  }
+
+  if(!d.files.length){
+    h += '<div style="padding:30px;text-align:center;color:var(--text-muted)">Empty</div>';
+  } else {
+    d.files.sort((a,b)=>b.isDirectory-a.isDirectory || a.name.localeCompare(b.name));
+    d.files.forEach(f=>{
+      const isArchive = ARCHIVE_EXTS.some(e=>f.name.toLowerCase().endsWith(e));
+      const icon = f.isDirectory ? 'fa-folder' : 'fa-file-code';
+      const color = f.isDirectory ? 'var(--primary)' : 'var(--text-muted)';
+      const checked = selectedFiles.has(f.path) ? 'checked' : '';
+
+      h += `<div class="file-row" data-path="${esc(f.path)}" data-isdir="${f.isDirectory?1:0}" data-isarchive="${isArchive?1:0}" style="border-bottom:1px solid var(--border); padding:12px; display:flex; align-items:center; transition:background 0.2s; cursor:pointer;" onmouseover="this.style.background='var(--bg-surface-hover)'" onmouseout="this.style.background='transparent'">
+
+        <input type="checkbox" class="chk file-chk" data-path="${esc(f.path)}" ${checked} onchange="toggleSelect(this.dataset.path, this.checked)" style="width:16px; height:16px; margin-right:10px; accent-color:var(--primary); cursor:pointer; flex-shrink:0;" onclick="event.stopPropagation()">
+
+        <div class="icon" data-action="open" style="width:24px; color:${color}; flex-shrink:0;"><i class="fas ${icon}"></i></div>
+        <div class="name" data-action="open" style="flex:1; word-break:break-all; margin-left:10px;">${esc(f.name)}</div>
+
+        <div class="size" style="margin-right:16px; font-size:12px; color:var(--text-muted); flex-shrink:0;">${f.isDirectory?'':fmtSize(f.size)}</div>
+
+        <button class="btn btn-secondary btn-sm" style="padding:4px 8px; flex-shrink:0; background:transparent; border:none; color:var(--text-muted);" onclick="openContextMenu(event, this)">
+          <i class="fas fa-ellipsis-v"></i>
+        </button>
+      </div>`;
+    });
+  }
+  c.innerHTML = h;
+
+  const selAll = document.getElementById('selectAllChk');
+  const allChks = document.querySelectorAll('.file-chk');
+  if (selAll) selAll.checked = allChks.length > 0 && Array.from(allChks).every(c => c.checked);
+
+  updateBulkBar();
+}
+
+document.getElementById('fileList').addEventListener('click', e => {
+  if (e.target.closest('.chk') || e.target.closest('button')) return;
+  const actionEl = e.target.closest('[data-action="open"]');
+  if (!actionEl) return;
+  const row = actionEl.closest('.file-row');
+  if (!row) return;
+  openFileOrFolder(row.dataset.path, row.dataset.isdir === '1');
+});
+
+function openFileOrFolder(path, isDir) {
+  if(isDir) { subPath = path; selectedFiles.clear(); loadFiles(); }
+  else editFile(path);
+}
+
+function goUp(){
+  if(!subPath) return;
+  const parts = subPath.split('/').filter(Boolean);
+  parts.pop();
+  subPath = parts.join('/');
+  selectedFiles.clear();
+  loadFiles();
+}
+
+function toggleSelectAll(checked){
+  document.querySelectorAll('.file-chk').forEach(chk=>{
+    chk.checked = checked;
+    if(checked) selectedFiles.add(chk.dataset.path);
+    else selectedFiles.delete(chk.dataset.path);
+  });
+  updateBulkBar();
+}
+
+function toggleSelect(path, checked){
+  if(checked) selectedFiles.add(path);
+  else selectedFiles.delete(path);
+  const all = document.querySelectorAll('.file-chk');
+  const selAll = document.getElementById('selectAllChk');
+  if(selAll) selAll.checked = all.length > 0 && Array.from(all).every(c=>c.checked);
+  updateBulkBar();
+}
+
+function updateBulkBar(){
+  const bar = document.getElementById('bulkBar');
+  const count = selectedFiles.size;
+  if(count > 0){
+    bar.style.display = 'flex';
+    document.getElementById('selCount').textContent = count;
+    const allArchives = Array.from(selectedFiles).every(p => {
+      const lower = p.toLowerCase();
+      return ARCHIVE_EXTS.some(ext => lower.endsWith(ext));
+    });
+    const txt = document.getElementById('bulkArchiveText');
+    const icon = document.getElementById('bulkArchiveIcon');
+    if (allArchives) {
+      txt.textContent = 'UNARCHIVE';
+      icon.className = 'fas fa-file-import';
+    } else {
+      txt.textContent = 'ARCHIVE';
+      icon.className = 'fas fa-file-archive';
+    }
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function clearSelection(){
+  selectedFiles.clear();
+  document.querySelectorAll('.file-chk').forEach(c => c.checked = false);
+  const selAll = document.getElementById('selectAllChk');
+  if(selAll) selAll.checked = false;
+  updateBulkBar();
+}
+
+function openContextMenu(e, btn) {
+  e.stopPropagation();
+  const row = btn.closest('.file-row');
+  ctxPath = row.dataset.path;
+  ctxIsDir = row.dataset.isdir === '1';
+  ctxIsArchive = row.dataset.isarchive === '1';
+  const menu = document.getElementById('contextMenu');
+  document.getElementById('ctxEdit').style.display = (ctxIsDir) ? 'none' : 'flex';
+  const ctxArchiveText = document.getElementById('ctxArchiveText');
+  const ctxArchiveIcon = document.getElementById('ctxArchiveIcon');
+  if (ctxIsArchive) {
+    ctxArchiveText.textContent = 'Unarchive';
+    ctxArchiveIcon.className = 'fas fa-file-import';
+  } else {
+    ctxArchiveText.textContent = 'Archive';
+    ctxArchiveIcon.className = 'fas fa-file-archive';
+  }
+  menu.style.display = 'block';
+  const rect = btn.getBoundingClientRect();
+  let x = rect.left - 120;
+  let y = rect.bottom + 5;
+  if (x < 10) x = 10;
+  if (y + 250 > window.innerHeight) y = rect.top - 250;
+  menu.style.left = x + 'px';
+  menu.style.top = y + 'px';
+}
+
+window.addEventListener('click', function(e) {
+  const menu = document.getElementById('contextMenu');
+  if (menu && !menu.contains(e.target) && !e.target.closest('button[onclick*="openContextMenu"]')) {
+    menu.style.display = 'none';
+  }
+});
+
+async function ctxAction(action) {
+  document.getElementById('contextMenu').style.display = 'none';
+  const p = ctxPath;
+  if(!p) return;
+
+  if(action === 'edit') {
+    if (!ctxIsDir) editFile(p);
+  }
+  else if(action === 'rename') {
+    const oldName = p.split('/').pop();
+    const newName = prompt('New name:', oldName);
+    if(!newName || newName === oldName) return;
+    const newPath = subPath ? subPath + '/' + newName : newName;
+    const d = await api('/api/servers/'+currentServerId+'/file/rename', {method:'POST', body:JSON.stringify({oldPath: p, newPath})});
+    if(!d.success) return toast(d.error, 'error');
+    toast('Renamed successfully', 'success');
+    loadFiles();
+  }
+  else if(action === 'move') {
+    const target = prompt('Move to which folder inside this server? (e.g., plugins, or leave empty for the root folder)', '');
+    if(target === null) return;
+    const d = await api('/api/servers/'+currentServerId+'/file/bulk-move', {method:'POST', body:JSON.stringify({paths: [p], target})});
+    if(!d.success) return toast(d.error, 'error');
+    toast('Moved successfully', 'success');
+    loadFiles();
+  }
+  else if(action === 'archive') {
+    if (ctxIsArchive) openExtract(p);
+    else openCompress(p);
+  }
+  else if(action === 'delete') {
+    if(!confirm(`Delete "${p.split('/').pop()}"?`)) return;
+    const d = await api('/api/servers/'+currentServerId+'/file/delete?path='+encodeURIComponent(p), {method:'DELETE'});
+    if(!d.success) return toast(d.error, 'error');
+    toast('Deleted', 'success');
+    loadFiles();
+  }
+}
+
+async function bulkMove() {
+  if(!selectedFiles.size) return;
+  const target = prompt('Move selected files to which folder inside this server? (e.g., plugins, or leave empty for the root folder)', '');
+  if(target === null) return;
+  const paths = Array.from(selectedFiles);
+  const d = await api('/api/servers/'+currentServerId+'/file/bulk-move', {method:'POST', body:JSON.stringify({paths, target})});
+  if(!d.success) return toast(d.error, 'error');
+  toast('Moved successfully', 'success');
+  selectedFiles.clear();
+  loadFiles();
+}
+
+async function bulkArchiveAction() {
+  if(!selectedFiles.size) return;
+  const allArchives = Array.from(selectedFiles).every(p => {
+    const lower = p.toLowerCase();
+    return ARCHIVE_EXTS.some(ext => lower.endsWith(ext));
+  });
+  if (allArchives) {
+    if(!confirm(`Extract ${selectedFiles.size} archive file(s) to this folder?`)) return;
+    const paths = Array.from(selectedFiles);
+    let success = 0;
+    for (const p of paths) {
+      const d = await api('/api/servers/'+currentServerId+'/file/extract',{method:'POST',body:JSON.stringify({path:p,target:subPath})});
+      if(d.success) success++;
+    }
+    toast(`Successfully extracted ${success} file(s)`, 'success');
+    clearSelection();
+    loadFiles();
+  } else {
+    bulkCompress();
+  }
+}
+
+async function bulkDelete(){
+  if(!selectedFiles.size) return;
+  if(!confirm(`Delete ${selectedFiles.size} selected file(s)/folder(s)?`)) return;
+  const paths = Array.from(selectedFiles);
+  const d = await api('/api/servers/'+currentServerId+'/file/bulk-delete',{method:'POST',body:JSON.stringify({paths})});
+  if(!d.success) return toast(d.error,'error');
+  toast('Deleted','success');
+  selectedFiles.clear();
+  loadFiles();
+}
+
+function bulkCompress(){
+  if(!selectedFiles.size) return;
+  const paths = Array.from(selectedFiles).join('\n');
+  document.getElementById('compressOutput').value = (subPath.split('/').pop()||'archive')+'.zip';
+  document.getElementById('compressPaths').value = paths;
+  openModal('compressModal');
+}
+
+async function newFile(){
+  const n = prompt('File name:');
+  if(!n) return;
+  const p = subPath ? subPath + '/' + n : n;
+  const d = await api('/api/servers/'+currentServerId+'/file/write',{method:'POST',body:JSON.stringify({path:p,content:''})});
+  if(!d.success) return toast(d.error,'error');
+  toast('File created','success');
+  loadFiles();
+}
+
+async function newFolder(){
+  const n = prompt('Folder name:');
+  if(!n) return;
+  const p = subPath ? subPath + '/' + n : n;
+  const d = await api('/api/servers/'+currentServerId+'/file/mkdir',{method:'POST',body:JSON.stringify({path:p})});
+  if(!d.success) return toast(d.error,'error');
+  toast('Folder created','success');
+  loadFiles();
+}
+
+async function upload(input){
+  if(!input.files.length) return;
+  const fd = new FormData();
+  fd.append('file', input.files[0]);
+  const r = await fetch('/api/servers/'+currentServerId+'/file/upload?path='+encodeURIComponent(subPath),{method:'POST',body:fd,credentials:'same-origin'});
+  let d;
+  try { d = await r.json(); } catch(e) { return toast('Upload failed (HTTP '+r.status+')','error'); }
+  if(!d.success) return toast(d.error,'error');
+  toast('Uploaded','success');
+  input.value='';
+  loadFiles();
+}
+
+async function editFile(p){
+  currentFile = p;
+  const d = await api('/api/servers/'+currentServerId+'/file/read?path='+encodeURIComponent(p));
+  if(!d.success) return toast(d.error,'error');
+  document.getElementById('editorFile').textContent = p;
+  document.getElementById('editorContent').value = d.content;
+  document.getElementById('editorModal').classList.add('active');
+}
+
+function closeEditor(){ document.getElementById('editorModal').classList.remove('active'); }
+
+async function saveFile(){
+  const c = document.getElementById('editorContent').value;
+  const d = await api('/api/servers/'+currentServerId+'/file/write',{method:'POST',body:JSON.stringify({path:currentFile,content:c})});
+  if(!d.success) return toast(d.error,'error');
+  toast('Saved','success');
+  closeEditor();
+  loadFiles();
+}
+
+function openExtract(p){
+  document.getElementById('extractPath').value = p;
+  document.getElementById('extractTarget').value = subPath;
+  openModal('extractModal');
+}
+
+async function doExtract(){
+  const p = document.getElementById('extractPath').value;
+  const t = document.getElementById('extractTarget').value.trim();
+  const d = await api('/api/servers/'+currentServerId+'/file/extract',{method:'POST',body:JSON.stringify({path:p,target:t})});
+  if(!d.success) return toast(d.error,'error');
+  toast('Extracted','success');
+  closeModal('extractModal');
+  loadFiles();
+}
+
+function openCompress(p){
+  document.getElementById('compressOutput').value = (p.split('/').pop()||'archive')+'.zip';
+  document.getElementById('compressPaths').value = p;
+  openModal('compressModal');
+}
+
+async function doCompress(){
+  let o = document.getElementById('compressOutput').value.trim() || 'archive.zip';
+  if(!o.endsWith('.zip')) o+='.zip';
+  const outPath = subPath ? subPath+'/'+o : o;
+  const raw = document.getElementById('compressPaths').value.trim();
+  let paths = raw ? raw.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean) : [];
+  if(!paths.length) return toast('No paths','error');
+  const d = await api('/api/servers/'+currentServerId+'/file/compress',{method:'POST',body:JSON.stringify({paths,output:outPath})});
+  if(!d.success) return toast(d.error,'error');
+  toast('Compressed','success');
+  closeModal('compressModal');
+  loadFiles();
+}
+
+function loadServerSettings(){
+  const s = servers.find(x=>x.id===currentServerId); if(!s) return;
+  const can = roleLevel(currentUser.role) >= 2;
+  document.getElementById('setSrvName').value = s.name || '';
+  document.getElementById('setSrvStartup').value = s.startupCommand || 'npm start';
+  document.getElementById('setSrvRam').value = s.ram || 0;
+  document.getElementById('setSrvCpu').value = s.cpu || 0;
+  document.getElementById('setSrvDisk').value = s.disk || 0;
+  document.getElementById('setSrvDays').value = typeof s.days==='number'?s.days:30;
+  document.querySelectorAll('.res-field').forEach(el=>{ el.disabled = !can; });
+  document.querySelectorAll('.lock-res').forEach(el=>{ el.style.display = can?'none':'inline'; });
+  document.getElementById('settingsAlert').style.display = can ? 'none' : 'block';
+  if(!can) document.getElementById('settingsAlertText').textContent = 'Only admin/owner can change RAM/CPU/Disk/Days.';
+}
+
+function resetSettingsForm(){ loadServerSettings(); }
+
+async function saveServerSettings(){
+  const can = roleLevel(currentUser.role) >= 2;
+  const payload = {
+    name: document.getElementById('setSrvName').value.trim(),
+    startupCommand: document.getElementById('setSrvStartup').value.trim()
+  };
+  if(!payload.name) return toast('Name required','error');
+  if(!payload.startupCommand) return toast('Startup required','error');
+  if(can){
+    payload.ram = parseInt(document.getElementById('setSrvRam').value)||0;
+    payload.cpu = parseInt(document.getElementById('setSrvCpu').value)||0;
+    payload.disk = parseInt(document.getElementById('setSrvDisk').value)||0;
+    payload.days = parseInt(document.getElementById('setSrvDays').value)||0;
+  }
+  const d = await api('/api/servers/'+currentServerId,{method:'PUT',body:JSON.stringify(payload)});
+  if(!d.success) return toast(d.error||'Save failed','error');
+  toast('Saved','success');
+  await loadServers();
+  openServer(currentServerId);
+}
+
+async function loadKelolaTab(){
+  const s = servers.find(x=>x.id===currentServerId); if(!s) return;
+  const sel = document.getElementById('kelolaOwnerPick');
+  if(currentUser.role !== 'owner'){ sel.disabled = true; sel.innerHTML = `<option>${esc(s.ownerName)} (current)</option>`; return; }
+  const d = await api('/api/admin/users');
+  if(d.success){ users = d.users; sel.innerHTML = d.users.map(u=>`<option value="${u.id}" ${u.id===s.ownerId?'selected':''}>${esc(u.username)} (${u.role})</option>`).join(''); }
+}
+
+async function changeOwner(){
+  const id = document.getElementById('kelolaOwnerPick').value;
+  if(!id) return toast('Pick owner','error');
+  const d = await api('/api/servers/'+currentServerId,{method:'PUT',body:JSON.stringify({ownerId:id})});
+  if(!d.success) return toast(d.error,'error');
+  toast('Owner changed','success'); await loadServers(); openServer(currentServerId);
+}
+
+async function deleteServerFromDetail(){
+  if(!confirm('Delete this server permanently?')) return;
+  const d = await api('/api/servers/'+currentServerId,{method:'DELETE'});
+  if(!d.success) return toast(d.error,'error');
+  toast('Deleted','success'); closeDetail();
+}
+
+function openEditStartup(){
+  const s = servers.find(x=>x.id===currentServerId);
+  document.getElementById('editStartupInput').value = s ? s.startupCommand : 'npm start';
+  openModal('editStartupModal');
+}
+
+async function saveStartup(){
+  const c = document.getElementById('editStartupInput').value.trim();
+  if(!c) return toast('Required','error');
+  const d = await api('/api/servers/'+currentServerId+'/startup',{method:'PUT',body:JSON.stringify({startupCommand:c})});
+  if(!d.success) return toast(d.error,'error');
+  document.getElementById('startupDisplay').textContent = c;
+  toast('Saved','success'); closeModal('editStartupModal'); loadServers();
+}
+
+async function openAddServer(){
+  if(!requireRole(2)) return;
+  const d = await api('/api/admin/users');
+  if(d.success){ users = d.users; }
+  const wrap = document.getElementById('ownerPickWrap');
+  const sel = document.getElementById('srvOwner');
+  if(currentUser.role === 'admin'){ wrap.style.display = 'none'; }
+  else { wrap.style.display = 'block'; sel.innerHTML = users.map(u=>`<option value="${u.id}" ${u.id===currentUser.id?'selected':''}>${esc(u.username)} (${u.role})</option>`).join(''); }
+  document.getElementById('srvName').value = '';
+  document.getElementById('srvStartup').value = 'npm start';
+  document.getElementById('srvDays').value = '30';
+  openModal('addServerModal');
+}
+
+async function createServer(){
+  const payload = {
+    name: document.getElementById('srvName').value.trim(),
+    startupCommand: document.getElementById('srvStartup').value.trim() || 'npm start',
+    ram: parseInt(document.getElementById('srvRam').value)||0,
+    cpu: parseInt(document.getElementById('srvCpu').value)||0,
+    disk: parseInt(document.getElementById('srvDisk').value)||0,
+    days: parseInt(document.getElementById('srvDays').value)||30
+  };
+  if(!payload.name) return toast('Name required','error');
+  if(currentUser.role === 'owner') payload.ownerId = document.getElementById('srvOwner').value;
+  const d = await api('/api/servers',{method:'POST',body:JSON.stringify(payload)});
+  if(!d.success) return toast(d.error,'error');
+  toast('Created','success'); closeModal('addServerModal'); loadServers();
+}
+
+setInterval(()=>{
+  if(currentUser && document.getElementById('page-detail').style.display==='none') loadServers();
+}, 5000);
+</script>
+</body>
+</html>

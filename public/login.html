@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login — Rizz Pterodactyl</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/common.css">
+</head>
+<body>
+
+<div id="loginPage" style="display:flex">
+  <div class="login-box">
+    <div class="logo"><i class="fas fa-dragon"></i> Rizz Pterodactyl</div>
+    <div class="sub">Panel Management System</div>
+    <label>Username</label>
+    <input type="text" id="loginUser" placeholder="Enter username" autocomplete="off">
+    <label>Password</label>
+    <input type="password" id="loginPass" placeholder="Enter password" autocomplete="off">
+    <button onclick="doLogin()"><i class="fas fa-sign-in-alt"></i> Sign In</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/common.js"></script>
+<script>
+async function doLogin(){
+  const u = document.getElementById('loginUser').value.trim();
+  const p = document.getElementById('loginPass').value.trim();
+  if (!u || !p) return toast('Please enter username and password','error');
+  const d = await api('/api/auth/login', {method:'POST', body:JSON.stringify({username:u,password:p})});
+  if (!d.success) return toast(d.error || 'Login failed','error');
+  window.location.href = '/dashboard';
+}
+
+// Kalau sudah login, langsung ke dashboard
+(async()=>{
+  const d = await api('/api/auth/me');
+  if (d.success) return window.location.href = '/dashboard';
+  document.getElementById('loginUser').focus();
+  document.getElementById('loginPass').addEventListener('keypress', e=>{
+    if (e.key==='Enter') doLogin();
+  });
+})();
+</script>
+</body>
+</html>

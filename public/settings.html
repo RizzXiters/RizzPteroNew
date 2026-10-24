@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings — Rizz Pterodactyl</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/common.css">
+</head>
+<body>
+
+<div id="dashboard">
+  <div class="navbar">
+    <div class="brand"><i class="fas fa-dragon"></i> <span>Rizz Pterodactyl</span></div>
+    <div class="user-info" id="navbarUser"></div>
+  </div>
+  <div class="layout">
+    <div class="sidebar">
+      <div class="menu-item" onclick="location.href='/dashboard'"><i class="fas fa-server"></i> Dashboard</div>
+      <div class="menu-item" id="menuUsers" onclick="location.href='/user'"><i class="fas fa-users"></i> Users</div>
+      <div class="menu-item active" onclick="location.href='/settings'"><i class="fas fa-cog"></i> Settings</div>
+    </div>
+    <div class="main-content">
+      <div class="page-title">Settings</div>
+      <div class="page-subtitle">Manage your account & API keys</div>
+
+      <div class="card">
+        <div class="card-header"><h2><i class="fas fa-user-edit"></i> Profile</h2></div>
+        <div class="form-group"><label>Username</label><input id="setUsername"></div>
+        <div class="form-group"><label>Email</label><input id="setEmail" type="email"></div>
+        <button class="btn btn-primary" onclick="saveProfile()"><i class="fas fa-save"></i> Save Profile</button>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2><i class="fas fa-key"></i> API Keys</h2>
+          <button class="btn btn-warning btn-sm" onclick="regenKeys()"><i class="fas fa-sync"></i> Regenerate</button>
+        </div>
+        <div class="form-group" id="ptlaGroup" style="display:none">
+          <label>PTLA — Application API Key</label>
+          <div class="api-key-row">
+            <input id="ptlaKey" readonly onclick="this.select()">
+            <button class="btn btn-success btn-sm" onclick="copyKey('ptlaKey','PTLA')"><i class="fas fa-copy"></i></button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>PTLC — Client API Key</label>
+          <div class="api-key-row">
+            <input id="ptlcKey" readonly onclick="this.select()">
+            <button class="btn btn-success btn-sm" onclick="copyKey('ptlcKey','PTLC')"><i class="fas fa-copy"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h2><i class="fas fa-key"></i> Change Password</h2></div>
+        <div class="form-group"><label>Current Password</label><input id="setOldPass" type="password"></div>
+        <div class="form-group"><label>New Password</label><input id="setNewPass" type="password" placeholder="Min 8 chars"></div>
+        <div class="form-group"><label>Confirm Password</label><input id="setConfirmPass" type="password"></div>
+        <button class="btn btn-warning" onclick="savePassword()"><i class="fas fa-key"></i> Change Password</button>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h2><i class="fas fa-info-circle"></i> Account Info</h2></div>
+        <div id="accountInfo" style="color:var(--text-muted);font-size:14px;line-height:2;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/common.js"></script>
+<script>
+(async()=>{
+  const u = await requireLogin();
+  if (!u) return;
+  // 🔒 Show dashboard AFTER auth
+  document.getElementById('dashboard').style.display = 'flex';
+  renderNavbar();
+  if (roleLevel(u.role) < 2) document.getElementById('menuUsers').style.display = 'none';
+  loadSettings();
+})();
+
+function loadSettings(){
+  document.getElementById('setUsername').value = currentUser.username;
+  document.getElementById('setEmail').value = currentUser.email || '';
+  document.getElementById('setOldPass').value = '';
+  document.getElementById('setNewPass').value = '';
+  document.getElementById('setConfirmPass').value = '';
+  document.getElementById('accountInfo').innerHTML =
+    '<div><strong>Username:</strong> ' + esc(currentUser.username) + '</div>' +
+    '<div><strong>Email:</strong> ' + esc(currentUser.email || '-') + '</div>' +
+    '<div><strong>Role:</strong> ' + esc(currentUser.role.toUpperCase()) + '</div>';
+  loadApiKeys();
+}
+
+async function loadApiKeys(){
+  const d = await api('/api/user/api-keys');
+  if(!d.success) return;
+  document.getElementById('ptlcKey').value = d.ptlc || '-';
+  if(d.isAdmin && d.ptla){
+    document.getElementById('ptlaGroup').style.display = 'block';
+    document.getElementById('ptlaKey').value = d.ptla;
+  } else document.getElementById('ptlaGroup').style.display = 'none';
+}
+
+async function copyKey(id, label){
+  const el = document.getElementById(id);
+  if(!el || !el.value) return toast('Empty','error');
+  try { await navigator.clipboard.writeText(el.value); toast(label + ' copied','success'); }
+  catch(e){ el.select(); document.execCommand('copy'); toast(label + ' copied','success'); }
+}
+
+async function regenKeys(){
+  if(!confirm('Regenerate API keys?')) return;
+  const type = roleLevel(currentUser.role) >= 2 ? 'both' : 'ptlc';
+  const d = await api('/api/user/api-keys/regenerate',{method:'POST',body:JSON.stringify({type})});
+  if(!d.success) return toast(d.error,'error');
+  toast('Regenerated','success'); loadApiKeys();
+}
+
+async function saveProfile(){
+  const username = document.getElementById('setUsername').value.trim();
+  const email = document.getElementById('setEmail').value.trim();
+  if(!username) return toast('Username required','error');
+  const d = await api('/api/user/profile',{method:'PUT',body:JSON.stringify({username,email})});
+  if(!d.success) return toast(d.error,'error');
+  currentUser.username = d.user.username;
+  currentUser.email = d.user.email;
+  renderNavbar();
+  toast('Saved','success'); loadSettings();
+}
+
+async function savePassword(){
+  const oldP = document.getElementById('setOldPass').value;
+  const newP = document.getElementById('setNewPass').value;
+  const confP = document.getElementById('setConfirmPass').value;
+  if(!oldP || !newP || !confP) return toast('All fields required','error');
+  if(newP !== confP) return toast('Passwords do not match','error');
+  if(newP.length < 8) return toast('Min 8 chars','error');
+  const d = await api('/api/user/password',{method:'PUT',body:JSON.stringify({currentPassword:oldP,newPassword:newP})});
+  if(!d.success) return toast(d.error,'error');
+  toast('Password changed','success');
+  document.getElementById('setOldPass').value='';
+  document.getElementById('setNewPass').value='';
+  document.getElementById('setConfirmPass').value='';
+}
+</script>
+</body>
+</html>

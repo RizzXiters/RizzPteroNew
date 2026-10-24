@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Users — Rizz Pterodactyl</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="/common.css">
+</head>
+<body>
+
+<div id="dashboard">
+  <div class="navbar">
+    <div class="brand"><i class="fas fa-dragon"></i> <span>Rizz Pterodactyl</span></div>
+    <div class="user-info" id="navbarUser"></div>
+  </div>
+  <div class="layout">
+    <div class="sidebar">
+      <div class="menu-item" onclick="location.href='/dashboard'"><i class="fas fa-server"></i> Dashboard</div>
+      <div class="menu-item active" onclick="location.href='/user'"><i class="fas fa-users"></i> Users</div>
+      <div class="menu-item" onclick="location.href='/settings'"><i class="fas fa-cog"></i> Settings</div>
+    </div>
+    <div class="main-content">
+      <div class="page-title">User Management</div>
+      <div class="page-subtitle">Manage panel users</div>
+      <div class="card">
+        <div class="card-header">
+          <h2><i class="fas fa-users"></i> Users</h2>
+          <button class="btn btn-primary" onclick="openAddUserModal()"><i class="fas fa-user-plus"></i> Add User</button>
+        </div>
+        <table class="table">
+          <thead><tr><th>Username</th><th>Email</th><th>Role</th><th>Servers</th><th>Actions</th></tr></thead>
+          <tbody id="usersBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="addUserModal">
+  <div class="modal-content">
+    <h2><i class="fas fa-user-plus"></i> Add User</h2>
+    <div class="form-group"><label>Username</label><input id="usrName"></div>
+    <div class="form-group"><label>Email</label><input id="usrEmail" type="email"></div>
+    <div class="form-group"><label>Password</label><input id="usrPass" type="password" placeholder="Min 8 chars"></div>
+    <div class="form-group">
+      <label>Role</label>
+      <select id="usrRole">
+        <option value="user">User</option>
+        <option value="admin" id="optAdmin">Admin</option>
+      </select>
+    </div>
+    <div class="actions">
+      <button class="btn btn-secondary" onclick="closeModal('addUserModal')">Cancel</button>
+      <button class="btn btn-success" onclick="createUser()"><i class="fas fa-save"></i> Create</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/common.js"></script>
+<script>
+let users = [];
+
+(async()=>{
+  const u = await requireLogin();
+  if (!u) return;
+  // 🔒 Show dashboard AFTER auth
+  document.getElementById('dashboard').style.display = 'flex';
+  renderNavbar();
+  if (!requireRole(2)) return;
+  loadUsers();
+})();
+
+async function loadUsers(){
+  const d = await api('/api/admin/users');
+  if(!d.success) return toast(d.error,'error');
+  users = d.users;
+  renderUsers();
+}
+function renderUsers(){
+  const t = document.getElementById('usersBody');
+  if(!users.length){ t.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--text-muted)">Empty</td></tr>'; return; }
+  t.innerHTML = users.map(u=>`<tr>
+    <td><strong>${esc(u.username)}</strong></td>
+    <td>${esc(u.email||'-')}</td>
+    <td><span class="role-badge ${u.role}">${u.role.toUpperCase()}</span></td>
+    <td>${u.serverCount}</td>
+    <td>${u.canDelete ? `<button class="btn btn-danger btn-sm" onclick="delUser('${u.id}','${esc(u.username)}')"><i class="fas fa-trash"></i></button>` : '-'}</td>
+  </tr>`).join('');
+}
+
+function openAddUserModal(){
+  const optAdmin = document.getElementById('optAdmin');
+  if(currentUser.role === 'admin') optAdmin.style.display = 'none';
+  else optAdmin.style.display = '';
+  document.getElementById('usrName').value = '';
+  document.getElementById('usrEmail').value = '';
+  document.getElementById('usrPass').value = '';
+  document.getElementById('usrRole').value = 'user';
+  openModal('addUserModal');
+}
+async function createUser(){
+  const u = document.getElementById('usrName').value.trim();
+  const e = document.getElementById('usrEmail').value.trim();
+  const p = document.getElementById('usrPass').value.trim();
+  const r = document.getElementById('usrRole').value;
+  if(!u || !p) return toast('Username & password required','error');
+  if(p.length < 8) return toast('Min 8 chars','error');
+  const d = await api('/api/admin/users',{method:'POST',body:JSON.stringify({username:u,email:e,password:p,role:r})});
+  if(!d.success) return toast(d.error,'error');
+  toast('Created','success'); closeModal('addUserModal'); loadUsers();
+}
+async function delUser(id, name){
+  if(!confirm(`Delete user "${name}"?\nAll their servers will be deleted!`)) return;
+  const d = await api('/api/admin/users/'+id,{method:'DELETE'});
+  if(!d.success) return toast(d.error,'error');
+  toast('Deleted','success'); loadUsers();
+}
+
+// NOTE: openModal/closeModal defined in common.js (do NOT redefine)
+</script>
+</body>
+</html>
